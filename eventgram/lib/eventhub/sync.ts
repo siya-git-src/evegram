@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { todayIST } from "@/lib/format";
-import { EventHubLoginError, EventHubSession } from "./client";
+import { describeNetworkError, EventHubLoginError, EventHubSession } from "./client";
 import { guessCategory, looksLikeLoginPage, openToVitians, parseDashboard, parseDetail } from "./parse";
 
 /** How often the feed refreshes on its own when people open it. */
@@ -170,7 +170,7 @@ export async function runSync(deps: Deps = {}): Promise<SyncResult> {
   } catch (e) {
     const msg = e instanceof EventHubLoginError
       ? "EventHub didn't accept the sync account's username or password. Update EVENTHUB_USERNAME / EVENTHUB_PASSWORD on the server."
-      : `Sync stopped: ${e instanceof Error ? e.message : String(e)}`;
+      : `Sync stopped: ${describeNetworkError(e)}`;
     return finish({ ok: false, message: msg, added: 0, updated: 0, removed: 0 });
   }
 }
