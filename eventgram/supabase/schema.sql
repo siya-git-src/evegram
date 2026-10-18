@@ -41,7 +41,6 @@ create table if not exists events (
   category text not null default 'other'
     check (category in ('tech','cultural','sports','workshop','fest','social','other')),
   event_date date not null,
-  end_date date,                -- last day, for events that run over several days
   start_time time,
   end_time time,
   venue text not null default '',
@@ -69,7 +68,6 @@ create table if not exists events (
   updated_at timestamptz not null default now()
 );
 alter table events add column if not exists eh_detail_at timestamptz;
-alter table events add column if not exists end_date date;
 create index if not exists events_date_idx on events (event_date);
 create index if not exists events_club_idx on events (club_id);
 
@@ -144,7 +142,6 @@ begin
     new.title := old.title;
     new.description := old.description;
     new.event_date := old.event_date;
-    new.end_date := old.end_date;
     new.venue := old.venue;
     new.fee := old.fee;
     new.open_to := old.open_to;

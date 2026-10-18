@@ -112,7 +112,6 @@ select.chip.club-sel { background-color: var(--pink); }
 .meta { font-size: 13.5px; color: var(--muted); display: flex; gap: 4px 12px; flex-wrap: wrap; font-weight: 500; }
 .meta b { color: var(--ink); font-weight: 800; }
 .odline { color: var(--ink); font-weight: 800; }
-.nonvit { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; border: 2px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--ink); }
 
 /* registration band at the bottom of every card */
 .closes { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 12px; border-top: 2.5px dashed var(--line); background: var(--yellow); color: #231815; font-size: 12.5px; }

@@ -1,22 +1,19 @@
-import { CATEGORIES, fmtTime, lastDay, mediaUrl, odState, parts, sortedMedia } from "@/lib/format";
+import { CATEGORIES, fmtTime, mediaUrl, odState, parts, sortedMedia } from "@/lib/format";
 import type { EventFull, EventRow } from "@/lib/types";
 
-type TicketFields = Pick<EventRow, "title" | "category" | "event_date" | "start_time" | "fee"> & { end_date?: string | null };
+type TicketFields = Pick<EventRow, "title" | "category" | "event_date" | "start_time" | "fee">;
 
 /** Ticket-style poster built from the event details, for events without an uploaded poster. */
 export function Ticket({ e }: { e: TicketFields }) {
   const c = CATEGORIES[e.category] ?? CATEGORIES.other;
   const p = parts(e.event_date);
-  const end = lastDay(e);
-  const q = parts(end);
-  const day = end === e.event_date ? `${p.day} ${p.month}` : p.month === q.month ? `${p.day}–${q.day} ${p.month}` : `${p.day} ${p.month}–${q.day} ${q.month}`;
   const style = { "--pbg": c.sw.bg, "--pink-ink": c.sw.ink } as React.CSSProperties;
   return (
     <div className="ticket" style={style}>
       <span className="pkick">{c.label}</span>
       <p className="ptitle">{e.title}</p>
       <div className="stub">
-        <div><span className="l">{end === e.event_date ? p.dow : "Dates"}</span><span className="v">{day}</span></div>
+        <div><span className="l">{p.dow}</span><span className="v">{p.day} {p.month}</span></div>
         <div><span className="l">Time</span><span className="v">{e.start_time ? fmtTime(e.start_time) : "TBA"}</span></div>
         <div><span className="l">Entry</span><span className="v">{e.fee ? `₹${e.fee}` : "Free"}</span></div>
       </div>

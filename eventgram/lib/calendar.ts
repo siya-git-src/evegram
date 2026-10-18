@@ -1,7 +1,7 @@
-import { addDays, lastDay, odState, odTimes } from "./format";
+import { addDays, odState, odTimes } from "./format";
 import type { EventRow } from "./types";
 
-type CalEvent = Pick<EventRow, "id" | "title" | "event_date" | "start_time" | "end_time" | "venue" | "deadline" | "od_status" | "od_from" | "od_to" | "source" | "hook"> & { end_date?: string | null };
+type CalEvent = Pick<EventRow, "id" | "title" | "event_date" | "start_time" | "end_time" | "venue" | "deadline" | "od_status" | "od_from" | "od_to" | "source" | "hook">;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -16,16 +16,16 @@ const dayStamp = (date: string) => date.replaceAll("-", "");
 
 /** Start/end for calendars. No time known → an all-day event. No end → two hours. */
 export function eventTimes(e: CalEvent): { allDay: true; start: string; end: string } | { allDay: false; start: string; end: string } {
-  if (!e.start_time) return { allDay: true, start: dayStamp(e.event_date), end: dayStamp(addDays(lastDay(e), 1)) };
+  if (!e.start_time) return { allDay: true, start: dayStamp(e.event_date), end: dayStamp(addDays(e.event_date, 1)) };
   const start = utcStamp(e.event_date, e.start_time);
   let endTime = e.end_time;
-  let endDate = lastDay(e);
+  let endDate = e.event_date;
   if (!endTime) {
     const [h, m] = e.start_time.split(":").map(Number);
     const total = h * 60 + m + 120;
     endTime = `${pad(Math.floor(total / 60) % 24)}:${pad(total % 60)}`;
-    if (total >= 24 * 60) endDate = addDays(endDate, 1);
-  } else if (endDate === e.event_date && endTime <= e.start_time) {
+    if (total >= 24 * 60) endDate = addDays(e.event_date, 1);
+  } else if (endTime <= e.start_time) {
     endDate = addDays(e.event_date, 1); // runs past midnight, e.g. a 24-hour hackathon
   }
   return { allDay: false, start, end: utcStamp(endDate, endTime) };

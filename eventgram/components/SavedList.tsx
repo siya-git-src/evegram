@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { lastDay, odState, sortEvents } from "@/lib/format";
+import { odState, sortEvents } from "@/lib/format";
 import { EVENT_SELECT, type EventFull } from "@/lib/types";
 import EventCard from "./EventCard";
 import { useSaved } from "./SaveButton";
@@ -25,7 +25,7 @@ export default function SavedList({ today }: { today: string }) {
 
   if (events === null) return <p className="hint">Loading your saved events…</p>;
 
-  const upcoming = events.filter((e) => lastDay(e) >= today);
+  const upcoming = events.filter((e) => e.event_date >= today);
   if (!upcoming.length)
     return (
       <div className="empty">

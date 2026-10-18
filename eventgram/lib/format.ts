@@ -64,26 +64,8 @@ export function fmtTime(t: string | null | undefined): string {
   return `${h}${m ? ":" + pad(m) : ""} ${ap}`;
 }
 
-/** Last day of an event (multi-day events have an end_date). */
-export const lastDay = (e: { event_date: string; end_date?: string | null }) => e.end_date && e.end_date > e.event_date ? e.end_date : e.event_date;
-
-/** Is the event on this day (counting every day of multi-day events)? */
-export const onDay = (e: { event_date: string; end_date?: string | null }, day: string) => e.event_date <= day && lastDay(e) >= day;
-
-/** "Sat, 18 Oct" or, for multi-day events, "Sat, 18 Oct – Mon, 20 Oct" */
-export function fmtDateRange(e: { event_date: string; end_date?: string | null }): string {
-  const end = lastDay(e);
-  return end === e.event_date ? fmtDate(e.event_date) : `${fmtDate(e.event_date)} – ${fmtDate(end)}`;
-}
-
-/** Can VIT students sign up? EventHub writes "VITian", "Non-VITian" or "VITian/Non-VITian". */
-export function vitiansCanJoin(openTo: string | null | undefined): boolean {
-  if (!openTo) return true;
-  return openTo.split("/").some((p) => p.trim().toLowerCase() === "vitian");
-}
-
-export function whenText(e: Pick<EventRow, "event_date" | "start_time" | "end_time"> & { end_date?: string | null }) {
-  let s = fmtDateRange(e);
+export function whenText(e: Pick<EventRow, "event_date" | "start_time" | "end_time">) {
+  let s = fmtDate(e.event_date);
   if (e.start_time) s += ", " + fmtTime(e.start_time);
   if (e.end_time) s += " – " + fmtTime(e.end_time);
   return s;

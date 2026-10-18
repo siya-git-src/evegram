@@ -27,7 +27,6 @@ export type EventRow = {
   description: string;
   category: Category;
   event_date: string; // YYYY-MM-DD
-  end_date?: string | null; // last day of a multi-day event
   start_time: string | null; // HH:MM:SS
   end_time: string | null;
   venue: string;
