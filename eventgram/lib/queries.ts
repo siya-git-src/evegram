@@ -24,7 +24,7 @@ export async function getUpcomingEvents(): Promise<EventFull[]> {
   const { data, error } = await supabase
     .from("events")
     .select(EVENT_SELECT)
-    .gte("event_date", todayIST())
+    .or(`event_date.gte.${todayIST()},end_date.gte.${todayIST()}`)
     .order("event_date")
     .limit(500);
   if (error) throw new Error(error.message);

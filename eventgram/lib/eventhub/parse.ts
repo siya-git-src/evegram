@@ -3,10 +3,13 @@ import type { Category } from "@/lib/types";
 
 /** One event as it appears on EventHub's dashboard (the page right after signing in). */
 export type ListedEvent = {
-  eid: string | null; // null for past events (no View button)
+  /** Stable id for our database: EventHub's event id, or name+date for cards without a View button. */
+  key: string;
+  eid: string | null; // null when the card has no View button (registration closed, or past)
   title: string;
   openTo: string; // "VITian", "Non-VITian", "VITian/Non-VITian"
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD (first day)
+  endDate: string | null; // last day, for events that run over several days
   venue: string;
   fee: number;
   team: string | null; // "1", "1-3"
@@ -30,34 +33,61 @@ export function looksLikeLoginPage(html: string): boolean {
   return html.includes('name="validateVitian"') && !html.includes("card-body");
 }
 
-export function parseDashboard(html: string): ListedEvent[] {
+/** Every date written in a piece of text, as YYYY-MM-DD. Understands 2026-10-18, 18-10-2026, 18/10/2026 and 18.10.2026. */
+export function datesIn(text: string): string[] {
+  const out: string[] = [];
+  const re = /(\d{4})-(\d{1,2})-(\d{1,2})|(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/g;
+  for (const m of text.matchAll(re)) {
+    const [y, mo, d] = m[1] ? [m[1], m[2], m[3]] : [m[6], m[5], m[4]];
+    const iso = `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    if (!isNaN(Date.parse(iso))) out.push(iso);
+  }
+  return out;
+}
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+
+export type Dashboard = { events: ListedEvent[]; unreadable: string[] };
+
+export function parseDashboard(html: string): Dashboard {
   const root = parse(html, { comment: false });
   const out: ListedEvent[] = [];
+  const unreadable: string[] = [];
   for (const card of root.querySelectorAll(".card-body")) {
     const title = clean(card.querySelector("h3 span")?.text ?? card.querySelector("h3")?.text);
-    if (!title) continue;
+    if (!title) { const t = clean(card.text).slice(0, 60); if (t) unreadable.push(t); continue; }
     const field: Record<string, string> = {};
     for (const icon of card.querySelectorAll("i")) {
       const cls = icon.getAttribute("class") ?? "";
-      const key = (cls.match(/fa-(people-carry-box|calendar-days|map-location-dot|indian-rupee-sign|street-view)/) || [])[1];
+      const raw = (cls.match(/fa-(people-carry-box|calendar-days|calendar-day|calendar-check|calendar|map-location-dot|location-dot|indian-rupee-sign|rupee-sign|street-view)\b/) || [])[1];
+      const key = raw && ({ "calendar-day": "calendar-days", "calendar-check": "calendar-days", calendar: "calendar-days", "location-dot": "map-location-dot", "rupee-sign": "indian-rupee-sign" } as Record<string, string>)[raw] || raw;
       if (!key) continue;
       const next = icon.nextElementSibling;
       if (next && next.tagName === "SPAN") field[key] = clean(next.text);
     }
-    const date = field["calendar-days"] ?? "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-    const feeText = field["indian-rupee-sign"] ?? "";
+    // Prefer the date field; fall back to any date written on the card.
+    const dates = datesIn(field["calendar-days"] ?? "").concat(field["calendar-days"] ? [] : datesIn(card.text));
+    if (!dates.length) { unreadable.push(title); continue; }
+    const sorted = [...new Set(dates)].sort();
+    const date = sorted[0];
+    const endDate = sorted.length > 1 ? sorted[sorted.length - 1] : null;
+    const feeText = (field["indian-rupee-sign"] ?? "").replace(/[,\s₹]/g, "");
+    const eid = card.querySelector('button[name="eid"]')?.getAttribute("value") ?? null;
     out.push({
-      eid: card.querySelector('button[name="eid"]')?.getAttribute("value") ?? null,
+      key: eid ?? `t:${slug(title)}:${date}`,
+      eid,
       title,
       openTo: field["people-carry-box"] ?? "",
       date,
+      endDate,
       venue: cleanVenue(field["map-location-dot"] ?? ""),
       fee: /^\d+$/.test(feeText) ? parseInt(feeText, 10) : 0,
       team: field["street-view"] || null,
     });
   }
-  return out;
+  // EventHub sometimes lists the same event twice; keep one.
+  const seen = new Set<string>();
+  return { events: out.filter((e) => (seen.has(e.key) ? false : (seen.add(e.key), true))), unreadable };
 }
 
 const LABELS = ["Event Name", "Event Description", "Participants", "Event Date", "Event Venue", "Event Time", "Conducted By", "Total Fees"];

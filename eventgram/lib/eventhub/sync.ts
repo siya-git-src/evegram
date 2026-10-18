@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { todayIST } from "@/lib/format";
 import { describeNetworkError, EventHubLoginError, EventHubSession } from "./client";
-import { guessCategory, looksLikeLoginPage, openToVitians, parseDashboard, parseDetail } from "./parse";
+import { guessCategory, looksLikeLoginPage, parseDashboard, parseDetail } from "./parse";
 
 /** How often the feed refreshes on its own when people open it. */
 const STALE_AFTER_MS = 3 * 60 * 60 * 1000;
@@ -19,7 +19,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export type SyncResult = { ok: boolean; message: string; added: number; updated: number; removed: number };
 
 type Existing = {
-  id: string; eventhub_eid: string; club_id: string | null; title: string; event_date: string; venue: string;
+  id: string; eventhub_eid: string; club_id: string | null; title: string; event_date: string; end_date: string | null; venue: string;
   fee: number; open_to: string | null; team_size: string | null; start_time: string | null; description: string;
   eh_conducted_by: string | null; eh_detail_at: string | null;
 };
@@ -63,18 +63,25 @@ export async function runSync(deps: Deps = {}): Promise<SyncResult> {
   try {
     const hub = deps.hub ?? new EventHubSession();
     const dashboard = await hub.login(username, password);
-    const listed = parseDashboard(dashboard);
+    const { events: listed, unreadable } = parseDashboard(dashboard);
     if (listed.length === 0) {
       return finish({ ok: false, message: "Signed in, but EventHub's page had no events I could read. Nothing was changed.", added: 0, updated: 0, removed: 0 });
     }
 
     const today = deps.today ?? todayIST();
     const nowIso = new Date().toISOString();
-    const wanted = listed.filter((x) => x.eid && x.date >= today && openToVitians(x.openTo));
+    const lastDay = (x: { date: string; endDate: string | null }) => x.endDate ?? x.date;
+    // Everything EventHub lists goes in. Upcoming and ongoing events first, soonest first, so they get their details read first.
+    const wanted = [...listed].sort((a, b) => {
+      const au = lastDay(a) >= today, bu = lastDay(b) >= today;
+      if (au !== bu) return au ? -1 : 1;
+      return au ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date);
+    });
+    const upcomingCount = wanted.filter((x) => lastDay(x) >= today).length;
 
     const [{ data: existingRows, error: exErr }, { data: clubs }] = await Promise.all([
       admin.from("events")
-        .select("id,eventhub_eid,club_id,title,event_date,venue,fee,open_to,team_size,start_time,description,eh_conducted_by,eh_detail_at")
+        .select("id,eventhub_eid,club_id,title,event_date,end_date,venue,fee,open_to,team_size,start_time,description,eh_conducted_by,eh_detail_at")
         .eq("source", "eventhub"),
       admin.from("clubs").select("id, eventhub_names"),
     ]);
@@ -92,8 +99,9 @@ export async function runSync(deps: Deps = {}): Promise<SyncResult> {
     let added = 0, updated = 0, removed = 0, detailsRead = 0, detailsSkipped = 0;
 
     for (const x of wanted) {
-      const ex = existing.get(x.eid!);
-      const needDetail = !ex || !ex.eh_detail_at || Date.now() - new Date(ex.eh_detail_at).getTime() > DETAIL_MAX_AGE_MS;
+      const ex = existing.get(x.key);
+      const needDetail = !!x.eid && lastDay(x) >= today &&
+        (!ex || !ex.eh_detail_at || Date.now() - new Date(ex.eh_detail_at).getTime() > DETAIL_MAX_AGE_MS);
       let detail = null;
       if (needDetail) {
         if (detailsRead < DETAIL_BUDGET) {
@@ -113,6 +121,7 @@ export async function runSync(deps: Deps = {}): Promise<SyncResult> {
       const base = {
         title: x.title,
         event_date: x.date,
+        end_date: x.endDate,
         venue: x.venue,
         fee: x.fee,
         open_to: x.openTo || null,
@@ -131,7 +140,7 @@ export async function runSync(deps: Deps = {}): Promise<SyncResult> {
       if (!ex) {
         const { error } = await admin.from("events").insert({
           source: "eventhub",
-          eventhub_eid: x.eid,
+          eventhub_eid: x.key,
           category: guessCategory(x.title),
           club_id: clubFor(detail?.conductedBy ?? null),
           ...base,
@@ -140,7 +149,7 @@ export async function runSync(deps: Deps = {}): Promise<SyncResult> {
         added++;
       } else {
         const changed =
-          ex.title !== base.title || ex.event_date !== base.event_date || ex.venue !== base.venue || ex.fee !== base.fee ||
+          ex.title !== base.title || ex.event_date !== base.event_date || (ex.end_date ?? null) !== base.end_date || ex.venue !== base.venue || ex.fee !== base.fee ||
           (ex.open_to ?? null) !== base.open_to || (ex.team_size ?? null) !== base.team_size ||
           (detail && ((detail.time && (ex.start_time ?? "").slice(0, 5) !== detail.time) || ex.description !== detail.description || ex.eh_conducted_by !== detail.conductedBy));
         const claim = !ex.club_id && detail ? clubFor(detail.conductedBy) : null;
@@ -152,9 +161,10 @@ export async function runSync(deps: Deps = {}): Promise<SyncResult> {
 
     // Upcoming events that vanished from EventHub were cancelled or unpublished: remove them.
     // Safety: if most of them vanished at once, EventHub probably changed its page, so change nothing.
-    const listedIds = new Set(listed.map((x) => x.eid).filter(Boolean));
-    const gone = [...existing.values()].filter((r) => r.event_date >= today && !listedIds.has(r.eventhub_eid));
-    const upcomingKnown = [...existing.values()].filter((r) => r.event_date >= today).length;
+    const listedIds = new Set(listed.map((x) => x.key));
+    const isUpcoming = (r: Existing) => (r.end_date ?? r.event_date) >= today;
+    const gone = [...existing.values()].filter((r) => isUpcoming(r) && !listedIds.has(r.eventhub_eid));
+    const upcomingKnown = [...existing.values()].filter(isUpcoming).length;
     let note = "";
     const suspicious = (gone.length > 2 && gone.length > upcomingKnown * 0.5) || (upcomingKnown > 1 && gone.length === upcomingKnown);
     if (gone.length && !suspicious) {
@@ -166,7 +176,8 @@ export async function runSync(deps: Deps = {}): Promise<SyncResult> {
     }
 
     const more = detailsSkipped ? ` ${detailsSkipped} event pages will be read next time.` : "";
-    return finish({ ok: true, message: `Read ${listed.length} EventHub events (${wanted.length} upcoming for VITians).${more}${note}`, added, updated, removed });
+    const odd = unreadable.length ? ` Couldn't read the date on: ${unreadable.slice(0, 5).join("; ")}${unreadable.length > 5 ? "…" : ""}.` : "";
+    return finish({ ok: true, message: `Read ${listed.length} EventHub events (${upcomingCount} today or later).${more}${note}${odd}`, added, updated, removed });
   } catch (e) {
     const msg = e instanceof EventHubLoginError
       ? "EventHub didn't accept the sync account's username or password. Update EVENTHUB_USERNAME / EVENTHUB_PASSWORD on the server."

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { addDays, CATEGORIES, clubName, fmtDate, odState, parts } from "@/lib/format";
+import { addDays, CATEGORIES, clubName, fmtDate, lastDay, odState, onDay, parts } from "@/lib/format";
 import type { Category, EventFull } from "@/lib/types";
 import EventCard from "./EventCard";
 
@@ -14,7 +14,10 @@ export default function Feed({ events, today, syncedText }: { events: EventFull[
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
-    events.forEach((e) => (c[e.event_date] = (c[e.event_date] || 0) + 1));
+    events.forEach((e) => {
+      // count the event on each of its days (up to two weeks)
+      for (let d = e.event_date, i = 0; d <= lastDay(e) && i < 15; d = addDays(d, 1), i++) c[d] = (c[d] || 0) + 1;
+    });
     return c;
   }, [events]);
 
@@ -24,7 +27,7 @@ export default function Feed({ events, today, syncedText }: { events: EventFull[
     const needle = q.trim().toLowerCase();
     return events.filter(
       (e) =>
-        (date === "all" || e.event_date === date) &&
+        (date === "all" || onDay(e, date)) &&
         (!od || odState(e) === "yes") &&
         (cat === "all" || e.category === cat) &&
         (club === "all" || clubName(e) === club) &&

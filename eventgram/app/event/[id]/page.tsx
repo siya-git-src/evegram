@@ -9,6 +9,7 @@ import { headers } from "next/headers";
 import EventMedia from "@/components/EventMedia";
 import RegisterLink from "@/components/RegisterLink";
 import SaveButton from "@/components/SaveButton";
+import { vitiansCanJoin } from "@/lib/format";
 import { CATEGORIES, clubAvatar, clubName, deadlineInfo, fmtDate, initials, mediaUrl, odState, odTimes, sortedMedia, todayIST, whenText } from "@/lib/format";
 import { getRole } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -79,7 +80,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             <dd>{fmtDate(dl.date)} {dl.kind === "closed" && <span className="muted">· closed</span>}</dd>
           </>
         )}
-        {e.open_to && (<><dt>Open to</dt><dd>{e.open_to}{e.team_size ? ` · team of ${e.team_size.replace("-", "–")}` : ""}</dd></>)}
+        {e.open_to && (<><dt>Open to</dt><dd>{vitiansCanJoin(e.open_to) ? e.open_to : "Non-VITians only"}{e.team_size ? ` · team of ${e.team_size.replace("-", "–")}` : ""}</dd></>)}
       </dl>
 
       {(e.hook || e.highlights || e.instagram_url || e.contact) && (

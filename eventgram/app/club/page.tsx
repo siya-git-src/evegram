@@ -21,7 +21,7 @@ export default async function ClubHome() {
     );
   }
 
-  let query = supabase.from("events").select(EVENT_SELECT).gte("event_date", todayIST()).order("event_date").limit(500);
+  let query = supabase.from("events").select(EVENT_SELECT).or(`event_date.gte.${todayIST()},end_date.gte.${todayIST()}`).order("event_date").limit(500);
   // A club sees its own events plus EventHub events no club has claimed yet.
   if (!isOwner && club) query = query.or(`club_id.eq.${club.id},club_id.is.null`);
   const { data } = await query;

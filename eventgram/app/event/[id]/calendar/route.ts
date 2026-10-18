@@ -8,7 +8,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const supabase = await createClient();
   const { data: e } = await supabase
     .from("events")
-    .select("id,title,event_date,start_time,end_time,venue,deadline,od_status,od_from,od_to,source,hook")
+    .select("id,title,event_date,end_date,start_time,end_time,venue,deadline,od_status,od_from,od_to,source,hook")
     .eq("id", id)
     .maybeSingle();
   if (!e) return NextResponse.json({ error: "Event not found" }, { status: 404 });

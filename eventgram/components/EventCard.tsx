@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CATEGORIES, clubAvatar, clubName, deadlineInfo, fmtDate, fmtTime, initials, odState, odTimes } from "@/lib/format";
+import { CATEGORIES, clubAvatar, clubName, deadlineInfo, fmtDate, fmtDateRange, fmtTime, initials, odState, odTimes, vitiansCanJoin } from "@/lib/format";
 import type { EventFull } from "@/lib/types";
 import EventMedia from "./EventMedia";
 import RegisterLink from "./RegisterLink";
@@ -32,8 +32,9 @@ export default function EventCard({ e, today, preview = false }: { e: EventFull;
   const od = odState(e) === "yes";
   const meta = (
     <div className="meta">
-      <span><b>{fmtDate(e.event_date)}</b>{e.start_time ? " · " + fmtTime(e.start_time) : ""}</span>
+      <span><b>{fmtDateRange(e)}</b>{e.start_time ? " · " + fmtTime(e.start_time) : ""}</span>
       <span>{e.venue}</span>
+      {!vitiansCanJoin(e.open_to) && <span className="nonvit">Non-VITians only</span>}
       {od && e.od_from && <span className="odline">OD {odTimes(e)}</span>}
     </div>
   );
